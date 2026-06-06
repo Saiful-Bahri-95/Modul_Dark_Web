@@ -1017,3 +1017,88 @@ h2.lec-h {
     font-size: 14.5px;
   }
 }
+
+/* ===================== Figure (diagram SVG) & rekomendasi gambar ===================== */
+.content .fig {
+  margin: 26px 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  padding: 18px 18px 14px;
+  overflow-x: auto;
+}
+.content .fig svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 660px;
+  margin: 0 auto;
+}
+.content .fig figcaption {
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--faint);
+  text-align: center;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+}
+.content .imgrec {
+  border: 1px dashed rgba(106, 215, 255, 0.45);
+  background: rgba(106, 215, 255, 0.05);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  margin: 22px 0;
+}
+.content .imgrec .ir-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.content .imgrec p {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.content .imgrec p:last-child {
+  margin-bottom: 0;
+}
+.content .imgrec .ir-key {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--accent);
+}
+/* langkah bernomor bergaya "terminal" untuk panduan instalasi */
+.content ol.steps {
+  list-style: none;
+  counter-reset: step;
+  padding-left: 0;
+}
+.content ol.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding: 2px 0 2px 44px;
+  margin-bottom: 14px;
+}
+.content ol.steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(79, 224, 208, 0.08);
+  border: 1px solid rgba(79, 224, 208, 0.35);
+  border-radius: 9px;
+}
