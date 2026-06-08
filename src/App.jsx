@@ -3,8 +3,9 @@ import { course } from "./data/courseData.js";
 import "./styles/styles.css";
 import "./styles/animations.css";
 
-/* Kunci penyimpanan progres di localStorage (sama dgn versi HTML asli) */
+/* Kunci penyimpanan di localStorage */
 const STORE_KEY = "darkweb_course_progress_v1";
+const POS_KEY = "darkweb_course_position_v1";
 
 /* Ratakan semua bab -> daftar materi linear: {ci, li, chapter, lecture, gid} */
 function buildFlat() {
@@ -17,7 +18,6 @@ function buildFlat() {
   return flat;
 }
 
-/* Baca progres dari localStorage saat pertama kali load */
 function loadProgress() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -27,11 +27,22 @@ function loadProgress() {
   }
 }
 
+/* Baca posisi terakhir (materi yang sedang dibuka) */
+function loadPosition(max) {
+  try {
+    const n = parseInt(localStorage.getItem(POS_KEY) || "0", 10);
+    if (Number.isFinite(n) && n >= 0 && n < max) return n;
+  } catch {
+    /* abaikan */
+  }
+  return 0;
+}
+
 /* =========================================================================
    KUIS — state lokal per materi (di-remount via key saat materi berganti)
    ========================================================================= */
 function Quiz({ quiz }) {
-  const [answered, setAnswered] = useState({}); // { indeksSoal: indeksOpsiDipilih }
+  const [answered, setAnswered] = useState({});
 
   const total = quiz.questions.length;
   const answeredCount = Object.keys(answered).length;
@@ -42,7 +53,7 @@ function Quiz({ quiz }) {
   );
 
   const choose = (qi, oi) => {
-    if (answered[qi] !== undefined) return; // soal sudah dijawab -> terkunci
+    if (answered[qi] !== undefined) return;
     setAnswered((a) => ({ ...a, [qi]: oi }));
   };
 
@@ -96,7 +107,7 @@ function Quiz({ quiz }) {
 }
 
 /* =========================================================================
-   SIDEBAR — brand, bilah progres, dan navigasi bab/materi
+   SIDEBAR — brand, progres, PENCARIAN, dan navigasi bab/materi
    ========================================================================= */
 function Sidebar({
   flat,
@@ -107,12 +118,23 @@ function Sidebar({
   onGo,
   onReset,
   mobileOpen,
+  query,
+  setQuery,
 }) {
   const total = flat.length;
   const doneCount = flat.filter((f) => progress[f.gid]).length;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
   const chapterDone = (c) =>
     c.lectures.filter((l) => progress[c.id + "::" + l.id]).length;
+
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? flat.filter(
+        (f) =>
+          f.lecture.title.toLowerCase().includes(q) ||
+          f.chapter.title.toLowerCase().includes(q)
+      )
+    : [];
 
   return (
     <aside className={"sidebar" + (mobileOpen ? " open" : "")} id="sidebar">
@@ -141,49 +163,106 @@ function Sidebar({
         </button>
       </div>
 
-      <nav className="nav">
-        {course.chapters.map((c, ci) => {
-          const open = openChapters.has(ci);
-          return (
-            <div className={"chap" + (open ? " open" : "")} key={c.id}>
-              <button className="chap-head" onClick={() => onToggleChapter(ci)}>
-                <span className="chap-num">
-                  {ci === 0 ? "★" : String(ci).padStart(2, "0")}
-                </span>
-                <span className="chap-title">{c.title}</span>
-                <span className="chap-count">
-                  {chapterDone(c)}/{c.lectures.length}
-                </span>
-                <span className="chevron">▶</span>
-              </button>
+      <div className="search-wrap">
+        <span className="search-icon" aria-hidden="true">⌕</span>
+        <input
+          className="search-input"
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Cari materi…"
+          aria-label="Cari materi"
+        />
+        {query && (
+          <button
+            className="search-clear"
+            onClick={() => setQuery("")}
+            aria-label="Bersihkan pencarian"
+          >
+            ✕
+          </button>
+        )}
+      </div>
 
-              <div className="lectures">
-                {c.lectures.map((l) => {
-                  const gid = c.id + "::" + l.id;
-                  const fi = flat.findIndex((f) => f.gid === gid);
-                  const cls =
-                    "lec" +
-                    (progress[gid] ? " done" : "") +
-                    (fi === current ? " active" : "");
-                  return (
-                    <button className={cls} key={l.id} onClick={() => onGo(fi)}>
-                      <span className="tick">✓</span>
-                      <span className="lec-name">{l.title}</span>
-                    </button>
-                  );
-                })}
-              </div>
+      <nav className="nav">
+        {q ? (
+          matches.length ? (
+            <div className="search-results">
+              {matches.map((f) => {
+                const fi = flat.indexOf(f);
+                const cls =
+                  "sr-item" +
+                  (progress[f.gid] ? " done" : "") +
+                  (fi === current ? " active" : "");
+                const chapLabel =
+                  f.ci === 0 ? "Mulai di Sini" : "Bab " + f.ci;
+                return (
+                  <button className={cls} key={f.gid} onClick={() => onGo(fi)}>
+                    <span className="sr-chap">{chapLabel}</span>
+                    <span className="sr-title">{f.lecture.title}</span>
+                  </button>
+                );
+              })}
             </div>
-          );
-        })}
+          ) : (
+            <div className="search-empty">
+              Tidak ada materi cocok dengan “{query}”.
+            </div>
+          )
+        ) : (
+          course.chapters.map((c, ci) => {
+            const open = openChapters.has(ci);
+            return (
+              <div className={"chap" + (open ? " open" : "")} key={c.id}>
+                <button className="chap-head" onClick={() => onToggleChapter(ci)}>
+                  <span className="chap-num">
+                    {ci === 0 ? "★" : String(ci).padStart(2, "0")}
+                  </span>
+                  <span className="chap-title">{c.title}</span>
+                  <span className="chap-count">
+                    {chapterDone(c)}/{c.lectures.length}
+                  </span>
+                  <span className="chevron">▶</span>
+                </button>
+
+                <div className="lectures">
+                  {c.lectures.map((l) => {
+                    const gid = c.id + "::" + l.id;
+                    const fi = flat.findIndex((f) => f.gid === gid);
+                    const cls =
+                      "lec" +
+                      (progress[gid] ? " done" : "") +
+                      (fi === current ? " active" : "");
+                    return (
+                      <button
+                        className={cls}
+                        key={l.id}
+                        ref={fi === current ? activeRefSetter : null}
+                        onClick={() => onGo(fi)}
+                      >
+                        <span className="tick">✓</span>
+                        <span className="lec-name">{l.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })
+        )}
       </nav>
     </aside>
   );
 }
 
+/* ref callback: simpan elemen materi aktif agar bisa di-scroll ke tampak */
+let _activeEl = null;
+function activeRefSetter(el) {
+  if (el) _activeEl = el;
+}
+
 /* =========================================================================
-   MAIN — isi materi: breadcrumb, judul, meta, konten, latihan, poin kunci,
-   kuis, dan navigasi bawah
+   MAIN — isi materi
    ========================================================================= */
 function Main({ flat, current, progress, onToggleDone, onGo }) {
   const f = flat[current];
@@ -213,7 +292,6 @@ function Main({ flat, current, progress, onToggleDone, onGo }) {
         {done && <span className="pill done-pill">✓ selesai</span>}
       </div>
 
-      {/* Konten kaya HTML disuntik apa adanya dari data */}
       <div
         className={"content" + (l.cover ? " cover" : "")}
         dangerouslySetInnerHTML={{ __html: l.body }}
@@ -267,7 +345,7 @@ function Main({ flat, current, progress, onToggleDone, onGo }) {
 }
 
 /* =========================================================================
-   MOBILE BOTTOM NAV — prev / tandai selesai / next (hanya tampil di mobile)
+   MOBILE BOTTOM NAV
    ========================================================================= */
 function MobileNav({ current, total, done, onPrev, onNext, onToggleDone }) {
   return (
@@ -299,30 +377,44 @@ function MobileNav({ current, total, done, onPrev, onNext, onToggleDone }) {
 }
 
 /* =========================================================================
-   APP — state global: progres, materi aktif, bab terbuka, menu mobile
+   APP
    ========================================================================= */
 export default function App() {
   const flat = useMemo(buildFlat, []);
   const [progress, setProgress] = useState(loadProgress);
-  const [current, setCurrent] = useState(0);
-  const [openChapters, setOpenChapters] = useState(() => new Set([flat[0].ci]));
+  const [current, setCurrent] = useState(() => loadPosition(buildFlat().length));
+  const [openChapters, setOpenChapters] = useState(
+    () => new Set([flat[loadPosition(flat.length)].ci])
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [readPct, setReadPct] = useState(0);
 
-  /* Simpan progres tiap kali berubah */
+  /* Simpan progres */
   useEffect(() => {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(progress));
     } catch {
-      /* abaikan jika storage tidak tersedia */
+      /* abaikan */
     }
   }, [progress]);
+
+  /* Simpan posisi materi terakhir (#1 resume) */
+  useEffect(() => {
+    try {
+      localStorage.setItem(POS_KEY, String(current));
+    } catch {
+      /* abaikan */
+    }
+  }, [current]);
 
   const go = useCallback(
     (i) => {
       const idx = Math.max(0, Math.min(flat.length - 1, i));
       setCurrent(idx);
-      setOpenChapters((prev) => new Set(prev).add(flat[idx].ci)); // buka bab terkait
+      setOpenChapters((prev) => new Set(prev).add(flat[idx].ci));
       setMobileOpen(false);
+      setQuery("");
     },
     [flat]
   );
@@ -347,7 +439,65 @@ export default function App() {
 
   const resetProgress = useCallback(() => setProgress({}), []);
 
-  /* Nilai turunan untuk topbar & bottom-nav mobile */
+  /* #4 Navigasi keyboard: ←/→ pindah materi, Esc tutup drawer */
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = (e.target && e.target.tagName) || "";
+      const typing =
+        tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable;
+      if (e.key === "Escape") {
+        setMobileOpen(false);
+        return;
+      }
+      if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "ArrowRight") {
+        setCurrent((c) => {
+          const n = Math.min(flat.length - 1, c + 1);
+          if (n !== c) {
+            setOpenChapters((prev) => new Set(prev).add(flat[n].ci));
+            setQuery("");
+          }
+          return n;
+        });
+      } else if (e.key === "ArrowLeft") {
+        setCurrent((c) => {
+          const n = Math.max(0, c - 1);
+          if (n !== c) {
+            setOpenChapters((prev) => new Set(prev).add(flat[n].ci));
+            setQuery("");
+          }
+          return n;
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [flat]);
+
+  /* #3 Bilah progres baca: lacak scroll dalam satu materi */
+  useEffect(() => {
+    setReadPct(0);
+  }, [current]);
+  useEffect(() => {
+    const onScroll = () => {
+      const doc = document.documentElement;
+      const max = doc.scrollHeight - doc.clientHeight;
+      const p = max > 0 ? (doc.scrollTop / max) * 100 : 0;
+      setReadPct(Math.max(0, Math.min(100, p)));
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  /* #5-ringan: gulirkan materi aktif ke tampak di sidebar saat berpindah */
+  useEffect(() => {
+    if (_activeEl && _activeEl.scrollIntoView) {
+      _activeEl.scrollIntoView({ block: "nearest" });
+    }
+  }, [current, query]);
+
+  /* Nilai turunan */
   const total = flat.length;
   const doneCount = flat.filter((f) => progress[f.gid]).length;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
@@ -356,6 +506,11 @@ export default function App() {
 
   return (
     <>
+      {/* #3 Bilah progres baca (paling atas) */}
+      <div className="read-progress" aria-hidden="true">
+        <span style={{ width: readPct + "%" }} />
+      </div>
+
       <div className="topbar">
         <button
           className="menu-btn"
@@ -384,6 +539,8 @@ export default function App() {
           onGo={go}
           onReset={resetProgress}
           mobileOpen={mobileOpen}
+          query={query}
+          setQuery={setQuery}
         />
         <Main
           key={current}
