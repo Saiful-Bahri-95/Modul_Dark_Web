@@ -1,4 +1,4 @@
-/* Bab 2 — id: "tails"
+/* Bab 2 — id: "tails" (rev: + materi deep-dive internal TAILS)
    Data satu bab. Diimpor & digabung di ../courseData.js.
    'body'/'practice' tetap string HTML (dirender via dangerouslySetInnerHTML). */
 
@@ -570,6 +570,73 @@ export const chapter = {
             "Pakai Unsafe Browser khusus untuk menyelesaikan login portal, lalu tutup.",
             "Unsafe Browser TIDAK lewat TOR — jangan dipakai untuk apa pun yang sensitif.",
             "Setelah portal lolos, TAILS menyambung TOR; kembali pakai Tor Browser."
+          ]
+        },
+        {
+          id:"tails-deepdive",
+          title:"Deep-Dive: Di Balik Layar TAILS — Boot, RAM & Jalur Paksa ke TOR",
+          dur:"deep-dive · ± 18 menit",
+          body:`
+            <p class="lead">Kamu sudah bisa membuat, mem-boot, dan memakai TAILS. Sekarang kita bongkar mesinnya: bagaimana sistem operasi utuh bisa hidup dari USB tanpa menyentuh hard disk, ke mana perginya semua datamu saat shutdown, dan mekanisme apa yang <em>menjamin</em> tidak ada satu aplikasi pun yang bisa "kabur" keluar TOR. Setelah ini, klaim "amnesic" dan "incognito" bukan lagi slogan buatmu — kamu tahu persis tuasnya.</p>
+
+            <h4>1. Anatomi boot: dari USB ke RAM</h4>
+            <p>Saat komputer boot dari USB TAILS, yang terjadi kira-kira begini: bootloader memuat kernel Linux + <em>initramfs</em> ke RAM, lalu sistem file utama dimuat dari satu file terkompresi raksasa bernama <strong>SquashFS</strong> — bayangkan seluruh sistem operasi dikemas jadi satu arsip <em>baca-saja</em> (read-only). Di atas lapisan baca-saja itu dipasang lapisan tulis yang hidup <strong>sepenuhnya di RAM</strong> (overlay). Setiap file yang kamu "ubah" atau "simpan" sebenarnya hanya menulis ke lapisan RAM ini.</p>
+            <ul>
+              <li><strong>Hard disk internal tidak pernah di-mount.</strong> Bukan "tidak dipakai", tapi benar-benar tidak disentuh — Windows-mu tidak tahu apa-apa.</li>
+              <li><strong>Tidak ada swap.</strong> Linux biasa menulis isi RAM yang penuh ke disk (swap); TAILS mematikannya total, karena swap = jejak permanen.</li>
+              <li><strong>Listrik padam = data lenyap.</strong> RAM kehilangan isinya tanpa daya. Inilah akar sifat <em>amnesic</em> — bukan fitur "hapus riwayat", tapi konsekuensi fisika.</li>
+            </ul>
+
+            <h4>2. Memory wipe saat shutdown: melawan cold boot attack</h4>
+            <p>Ada detail yang jarang disadari: isi RAM tidak hilang <em>seketika</em> saat listrik putus — pada suhu normal ia memudar dalam hitungan detik, dan jika chip didinginkan (semprotan udara terbalik), bisa bertahan menit-menit. Serangan membaca sisa RAM ini disebut <strong>cold boot attack</strong>. Karena itu saat kamu shutdown, TAILS <strong>menimpa hampir seluruh RAM dengan data acak</strong> sebelum benar-benar mati — itulah jeda beberapa detik dengan layar penuh teks yang kamu lihat. Mencabut USB saat sistem berjalan juga memicu shutdown darurat + wipe yang sama. Jadi "cabut USB kalau ada yang menggedor pintu" bukan mitos film — itu fitur yang didesain serius.</p>
+
+            <h4>3. MAC spoofing: identitas perangkat keras juga disamarkan</h4>
+            <p>Setiap kartu WiFi/ethernet punya <strong>MAC address</strong> — nomor seri unik yang terlihat oleh router mana pun yang kamu sambungi. IP bisa disembunyikan TOR, tapi MAC tercatat di log router kafe/kampus dan bisa mengikat <em>perangkat fisikmu</em> ke lokasi & waktu. Karena itu, secara default TAILS <strong>mengacak MAC address</strong> setiap kali boot: router melihat perangkat yang "belum pernah ada". Catatan praktis: pada segelintir kartu WiFi, spoofing bikin koneksi gagal — opsi mematikannya ada di Welcome Screen (Additional Settings), dengan kesadaran bahwa kamu menukar sedikit anonimitas lokasi demi konektivitas.</p>
+
+            <h4>4. Jalur paksa ke TOR: bukan janji, tapi firewall</h4>
+            <p>Di Windows, "semua trafik lewat TOR" adalah <em>harapan</em> — aplikasi nakal bisa saja konek langsung. Di TAILS, itu <strong>aturan firewall (iptables) yang kaku</strong>:</p>
+            <ul>
+              <li>Satu-satunya proses yang boleh menyentuh internet langsung adalah <strong>proses TOR itu sendiri</strong> (dijalankan sebagai user khusus <code>debian-tor</code>).</li>
+              <li>Aplikasi lain — browser, email, chat, bahkan perintah <code>ping</code> — <strong>ditolak firewall</strong> jika mencoba keluar tanpa lewat TOR. Bukan disembunyikan: benar-benar diblokir.</li>
+              <li>Permintaan DNS pun dipaksa lewat resolver TOR — menutup <strong>DNS leak</strong>, kebocoran klasik pengguna VPN/proxy di OS biasa.</li>
+            </ul>
+            <p>Konsekuensi yang sering membingungkan pemula: aplikasi yang tidak dirancang untuk TOR akan tampak "internetnya mati" di TAILS. Itu bukan rusak — itu firewall melakukan tugasnya. Desain ini disebut <em>fail-closed</em>: kalau ada yang salah, hasilnya <strong>tidak ada koneksi</strong>, bukan koneksi bocor.</p>
+
+            <h4>5. Persistence: LUKS di balik "folder ajaib"</h4>
+            <p>Persistent Storage yang kamu aktifkan sebelumnya secara teknis adalah <strong>partisi terenkripsi LUKS</strong> (standar enkripsi disk di Linux) di sisa ruang USB. Saat kamu memasukkan passphrase di Welcome Screen, kunci enkripsi diturunkan dari passphrase-mu (melalui fungsi yang sengaja lambat, agar brute-force mahal), partisi dibuka, dan folder-folder yang kamu pilih (dotfiles, PGP key, dsb.) di-mount ke tempatnya. Dua implikasi penting: <strong>(1)</strong> kekuatan seluruh sistem = kekuatan passphrase-mu — kalimat panjang &gt; kata rumit pendek; <strong>(2)</strong> tanpa passphrase, isi partisi adalah derau acak — tidak ada "lupa password? klik di sini".</p>
+
+            <h4>6. Troubleshooting boot: dari pengalaman paling umum</h4>
+            <ul>
+              <li><strong>USB tidak muncul di Boot Menu</strong> → masuk BIOS/UEFI: pastikan <em>USB boot</em> aktif dan mode <strong>UEFI</strong> dipakai (TAILS modern butuh UEFI; coba matikan <em>Legacy/CSM</em>). Coba juga port USB lain — port USB 2.0 kadang lebih kooperatif daripada 3.0.</li>
+              <li><strong>"Secure Boot violation"</strong> → TAILS kini umumnya lolos Secure Boot, tapi pada firmware lama/bermasalah, matikan <em>Secure Boot</em> sementara di BIOS.</li>
+              <li><strong>Boot berhenti di layar hitam / logo</strong> → di menu boot TAILS, pilih entri <strong>Troubleshooting Mode</strong> — ia mematikan fitur grafis yang sering bentrok dengan GPU tertentu.</li>
+              <li><strong>Boot ulang selalu "lupa" persistence</strong> → pastikan kamu membuka kunci Persistent Storage di Welcome Screen <em>setiap boot</em>; ia tidak otomatis.</li>
+              <li><strong>WiFi tidak terdeteksi sama sekali</strong> → kemungkinan chip WiFi-mu butuh firmware proprietary yang tidak disertakan. Solusi paling andal: <strong>adapter USB WiFi</strong> yang dikenal kompatibel, atau kabel ethernet.</li>
+              <li><strong>Macet "Connecting to Tor…"</strong> → ingat materi captive portal (mungkin harus login WiFi dulu) dan materi bridge (jaringan memblokir TOR). Urutan diagnosis: portal dulu → jam sistem → bridge.</li>
+            </ul>
+
+            <div class="box warn">
+              <div class="bx-title">▲ Studi kasus nyata: amnesia sebagai alibi teknis</div>
+              <p>Dokumen internal yang bocor tahun 2014 menunjukkan lembaga intelijen besar menandai TAILS sebagai "ancaman" justru karena sifat amnesianya: tidak ada riwayat yang bisa disita, tidak ada cache yang bisa diforensik, dan setiap boot adalah perangkat "baru". Bandingkan dengan kasus-kasus forensik umum: kebanyakan orang terjerat oleh <em>artefak lokal</em> — thumbnail, riwayat, file temporer — bukan oleh jebolnya enkripsi. Pelajaran untukmu: <strong>jejak paling berbahaya sering ada di perangkatmu sendiri</strong>, dan TAILS menyerang masalah itu dari akarnya. Tapi ingat batasnya: TAILS tidak menghapus jejak di <em>sisi lain</em> — akun yang kamu login, pesan yang kamu kirim, log server tujuan.</p>
+            </div>
+
+            <div class="box tip">
+              <div class="bx-title">◇ Uji pemahaman cepat</div>
+              <p>Coba jawab tanpa membaca ulang: kenapa TAILS tidak butuh antivirus yang memindai "infeksi permanen"? <em>(Karena sistem baca-saja di-boot segar dari SquashFS tiap kali — malware yang menulis dirinya ke "sistem" sebenarnya hanya menulis ke RAM, dan mati bersama shutdown. Pengecualian: jika kamu sendiri menyimpannya ke Persistent Storage.)</em></p>
+            </div>
+
+            <div class="imgrec">
+              <div class="ir-title">📷 Rekomendasi gambar</div>
+              <p>(1) Layar <strong>memory wipe</strong> saat shutdown TAILS. (2) Welcome Screen dengan opsi <strong>MAC Address Anonymization</strong> di Additional Settings.</p>
+              <p><span class="ir-key">Cari: "tails shutdown memory wipe screen", "tails welcome screen mac spoofing"</span></p>
+            </div>
+          `,
+          practice:`<p>Boot TAILS dan lakukan tiga verifikasi mandiri: (1) Buka <em>Files</em> dan amati bahwa hard disk internalmu terlihat sebagai perangkat <em>yang tidak ter-mount</em> — jangan di-mount, cukup sadari TAILS membiarkannya. (2) Buka Terminal, jalankan <code>ip link</code> dua kali di dua sesi boot berbeda dan bandingkan MAC address WiFi-mu — kamu akan melihat ia berganti tiap boot. (3) Masih di Terminal, coba <code>curl https://example.com</code> — perhatikan ia gagal, lalu pahami kenapa: curl tidak diarahkan lewat TOR, dan firewall fail-closed menolaknya. Tiga pengamatan kecil ini adalah bukti empiris dari tiga klaim besar materi ini.</p>`,
+          takeaways:[
+            "TAILS = SquashFS baca-saja + lapisan tulis di RAM; tanpa swap, tanpa mount disk internal — amnesia adalah konsekuensi arsitektur, bukan fitur 'hapus riwayat'.",
+            "Saat shutdown, RAM ditimpa data acak untuk melawan cold boot attack; cabut USB = shutdown darurat + wipe.",
+            "MAC address diacak tiap boot; firewall fail-closed memaksa SEMUA trafik (termasuk DNS) lewat TOR — aplikasi non-TOR memang 'mati internet'.",
+            "Persistent Storage = partisi LUKS; kekuatannya setara passphrase-mu, dan tidak ada jalur pemulihan jika lupa."
           ]
         },
         {

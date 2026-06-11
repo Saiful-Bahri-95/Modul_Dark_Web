@@ -1,4 +1,4 @@
-/* Bab 1 — id: "tor"
+/* Bab 1 — id: "tor" (rev: + materi deep-dive circuit/consensus)
    Data satu bab. Diimpor & digabung di ../courseData.js.
    'body'/'practice' tetap string HTML (dirender via dangerouslySetInnerHTML). */
 
@@ -487,6 +487,100 @@ export const chapter = {
             "Aturan emas: jangan login akun asli, jangan resize jendela, jangan tambah add-on.",
             "Jangan buka dokumen unduhan saat online, hindari torrent lewat TOR, dan selalu utamakan HTTPS.",
             "Tampil 'sama seperti semua orang' justru membuatmu paling sulit dilacak."
+          ]
+        },
+        {
+          id:"tor-deepdive",
+          title:"Deep-Dive: Di Dalam Jaringan TOR — Consensus, Circuit & Cell",
+          dur:"deep-dive · ± 18 menit",
+          body:`
+            <p class="lead">Sampai sini kamu sudah bisa <em>memakai</em> TOR. Materi ini membuka kap mesinnya: dari mana TOR tahu relay mana yang ada, bagaimana tiga lapis enkripsi benar-benar dibangun, dan kenapa keputusan desain tertentu (guard yang "lengket", sel berukuran seragam) justru melindungimu. Paham mekanisme ini membuatmu bisa menilai sendiri klaim keamanan — bukan sekadar percaya.</p>
+
+            <h4>1. Consensus: peta jaringan yang diperbarui tiap jam</h4>
+            <p>Jaringan TOR terdiri dari ±7.000 relay relawan yang datang dan pergi. Siapa yang menjaga daftarnya? Sembilan server khusus bernama <strong>directory authorities</strong> — dioperasikan organisasi berbeda di negara berbeda, alamatnya tertanam (hardcoded) di dalam TOR Browser. Tiap jam mereka <em>memungut suara</em> tentang kondisi setiap relay, lalu menerbitkan dokumen kesepakatan bernama <strong>consensus</strong> yang ditandatangani mayoritas authority. Klienmu mengunduh consensus ini dan dari situlah ia tahu relay mana yang hidup, berapa bandwidth-nya, dan <em>flag</em> apa yang disandangnya:</p>
+            <ul>
+              <li><code>Guard</code> — cukup stabil & cepat untuk dipercaya jadi relay masuk;</li>
+              <li><code>Exit</code> — pemiliknya mengizinkan trafik keluar ke internet biasa;</li>
+              <li><code>Fast</code> / <code>Stable</code> — memenuhi ambang bandwidth & uptime;</li>
+              <li><code>HSDir</code> — ikut menyimpan "buku telepon" onion service.</li>
+            </ul>
+            <p>Karena consensus ditandatangani banyak pihak independen, penyerang tidak bisa menyodorkan "peta palsu" berisi relay jahat saja — ia harus membobol mayoritas authority sekaligus. Ini contoh prinsip yang akan sering kamu lihat lagi: <strong>jangan pernah bergantung pada satu titik kepercayaan</strong>.</p>
+
+            <h4>2. Membangun circuit: teleskop yang memanjang</h4>
+            <p>Saat kamu klik Connect, klienmu tidak langsung "menembak" tiga relay sekaligus. Circuit dibangun bertahap seperti <em>teleskop</em>:</p>
+            <ol class="steps">
+              <li>Klien membuka koneksi TLS ke <strong>Guard</strong>, lalu melakukan pertukaran kunci <em>ntor</em> (berbasis kurva eliptik Curve25519). Hasilnya: kunci rahasia bersama #1 yang bahkan Guard-nya sendiri tidak bisa pakai untuk membaca lapisan berikutnya.</li>
+              <li>Lewat terowongan itu, klien berkata pada Guard: "sambungkan aku ke relay X" (perintah <code>EXTEND</code>). Klien lalu ber-handshake dengan <strong>Middle</strong> <em>melalui</em> Guard — Guard hanya meneruskan surat tertutup, tidak ikut tahu isinya. Hasil: kunci bersama #2.</li>
+              <li>Proses diulang sekali lagi ke <strong>Exit</strong>. Hasil: kunci bersama #3.</li>
+            </ol>
+            <p>Kini klien memegang tiga kunci. Setiap data yang dikirim dienkripsi <strong>tiga kali bertumpuk</strong> (kunci #3 paling dalam, #1 paling luar). Guard mengupas lapis pertama, Middle lapis kedua, Exit lapis ketiga — persis metafora bawang di materi pertama, tapi sekarang kamu tahu kuncinya dari mana dan kenapa tidak ada relay yang bisa mengupas lebih dari jatahnya.</p>
+
+            <figure class="fig">
+              <svg viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tiga lapis enkripsi onion">
+                <text x="360" y="26" text-anchor="middle" fill="#e9f1f7" font-family="monospace" font-size="15" font-weight="700">Tiga lapis kunci, dikupas satu per satu</text>
+                <g font-family="monospace" font-size="11.5">
+                  <rect x="40" y="60" width="200" height="110" rx="12" fill="rgba(79,224,208,0.08)" stroke="#4fe0d0"/>
+                  <rect x="65" y="85" width="150" height="85" rx="10" fill="rgba(106,215,255,0.10)" stroke="#6ad7ff"/>
+                  <rect x="90" y="110" width="100" height="60" rx="8" fill="rgba(245,183,72,0.12)" stroke="#f5b748"/>
+                  <text x="140" y="143" text-anchor="middle" fill="#e9f1f7" font-size="10.5">DATA</text>
+                  <text x="140" y="78" text-anchor="middle" fill="#4fe0d0">kunci #1 (Guard)</text>
+                  <text x="140" y="102" text-anchor="middle" fill="#6ad7ff" font-size="10.5">kunci #2 (Middle)</text>
+                  <text x="245" y="78" fill="#9fb4c4" font-size="10">←
+ dikupas duluan</text>
+                </g>
+                <g font-family="monospace" font-size="11">
+                  <text x="420" y="80" fill="#4fe0d0">Guard  → kupas lapis #1, lihat: "teruskan ke Middle"</text>
+                  <text x="420" y="110" fill="#6ad7ff">Middle → kupas lapis #2, lihat: "teruskan ke Exit"</text>
+                  <text x="420" y="140" fill="#f5b748">Exit   → kupas lapis #3, lihat: data + tujuan</text>
+                  <text x="420" y="178" fill="#fb7185" font-size="10.5">Tidak ada yang memegang ketiga kunci sekaligus — kecuali kamu.</text>
+                </g>
+              </svg>
+              <figcaption>Telescoping circuit: tiap kunci disepakati langsung antara kamu dan relay ybs., relay lain cuma jadi kurir surat tertutup.</figcaption>
+            </figure>
+
+            <h4>3. Cell: kenapa semua paket berukuran sama</h4>
+            <p>Semua data di dalam TOR dipotong menjadi <strong>cell berukuran seragam (512 byte)</strong>. Email pendek, gambar besar, atau sekadar "ping" — semuanya tampak sebagai deretan kotak identik. Tujuannya melawan <em>traffic analysis</em>: pengamat di tengah jaringan tidak bisa menebak isi dari bentuk dan ukuran paket. Beberapa koneksi (stream) ke situs yang sama juga <em>dimultipleks</em> ke dalam satu circuit, jadi pola "satu permintaan = satu koneksi" ikut kabur.</p>
+            <p>Pasangannya adalah <strong>stream isolation</strong>: situs yang <em>berbeda</em> sengaja dilewatkan circuit yang <em>berbeda</em>. TOR Browser memisahkan circuit per domain utama yang kamu kunjungi — itulah kenapa ikon gembok menunjukkan relay berbeda untuk situs berbeda. Tanpa ini, satu exit node yang jahat bisa menghubungkan seluruh aktivitas sesimu menjadi satu profil.</p>
+
+            <h4>4. Kenapa Guard-mu "lengket" (dan itu bagus)</h4>
+            <p>Mungkin kamu sudah memperhatikan di latihan sebelumnya: saat circuit berganti, <strong>relay pertama hampir selalu sama</strong>. Itu bukan bug. Klienmu memilih satu guard dan memakainya selama <strong>±3–4 bulan</strong>. Logikanya kontra-intuitif tapi kuat: jika kamu mengganti relay masuk terus-menerus, cepat atau lambat kamu <em>pasti</em> mampir ke relay jahat (jika ada). Dengan guard tetap, hasilnya biner — kalau guard-mu jujur, kamu aman berbulan-bulan; kalau sial dapat yang jahat, paparanmu tetap terbatas pada satu titik yang tidak tahu tujuanmu. Statistik sederhana: lebih baik melempar dadu sekali daripada seribu kali jika satu angka berarti celaka.</p>
+
+            <h4>5. Hands-on: membaca log & mengenal torrc</h4>
+            <p>Dua keterampilan kecil yang membuatmu tidak panik saat ada masalah:</p>
+            <ol class="steps">
+              <li><strong>Lihat log bootstrap.</strong> Buka <em>Settings → Connection</em> di TOR Browser, cari tombol <strong>"View Logs"</strong>. Koneksi sehat diakhiri baris <code>Bootstrapped 100% (done)</code>. Simpan kebiasaan ini: log adalah tempat pertama mencari jawaban.</li>
+              <li><strong>Kenali file konfigurasi <code>torrc</code></strong> di folder instalasimu: <code>Tor Browser\\Browser\\TorBrowser\\Data\\Tor\\torrc</code>. Di sinilah pengaturan bridge tersimpan. Kamu juga bisa menambah baris seperti <code>ExcludeExitNodes {ru},{cn}</code> (hindari exit di negara tertentu).</li>
+            </ol>
+            <div class="box warn">
+              <div class="bx-title">▲ Godaan yang sebaiknya ditolak</div>
+              <p>Internet penuh tip seperti "kunci exit node ke negara X biar cepat" (<code>ExitNodes {xx} StrictNodes 1</code>). Ingat pelajaran teori informasi: <strong>setiap penyimpangan dari default membuatmu lebih unik</strong> dan menyempitkan kerumunan tempatmu bersembunyi. Ubah torrc hanya jika kamu paham persis konsekuensinya — default TOR Browser sudah hasil riset bertahun-tahun.</p>
+            </div>
+
+            <h4>6. Troubleshooting: TOR tidak mau connect</h4>
+            <ul>
+              <li><strong>Macet di "Loading network status" / persentase kecil</strong> → buka log. Kata kunci <code>Clock skew</code> berarti <strong>jam komputermu meleset</strong>; TOR menolak consensus yang "datang dari masa depan/masa lalu". Sinkronkan jam & zona waktu Windows, restart TOR.</li>
+              <li><strong>Log menyebut <code>TLS error</code> / koneksi putus berulang</strong> → jaringanmu kemungkinan memblokir TOR. Aktifkan bridge (obfs4/WebTunnel) seperti di materi bridges.</li>
+              <li><strong>Terhubung tapi sangat lambat</strong> → wajar: trafikmu mungkin memutari tiga benua. Coba "New Tor Circuit for this Site". Kalau semua situs lambat berhari-hari, jangan tergoda "optimasi" torrc — cukup sabar atau ganti waktu pakai.</li>
+              <li><strong>Antivirus/firewall pihak ketiga</strong> sering memutus koneksi lokal TOR (proses <code>tor.exe</code> ↔ browser). Tambahkan pengecualian folder Tor Browser bila perlu.</li>
+            </ul>
+
+            <div class="box warn">
+              <div class="bx-title">▲ Studi kasus nyata: "satu-satunya pengguna TOR di gedung"</div>
+              <p>Tahun 2013 seorang mahasiswa Harvard mengirim ancaman bom palsu lewat email anonim yang diakses via TOR — dan tertangkap dalam hitungan hari. Bukan karena TOR-nya jebol: pihak kampus cukup memeriksa <strong>log WiFi kampus</strong> dan bertanya, "siapa yang terhubung ke jaringan TOR pada jam pengiriman email itu?" Jawabannya: praktis hanya dia. Pelajarannya fundamental: TOR menyembunyikan <em>apa yang kamu lakukan</em>, tapi <strong>fakta bahwa kamu memakai TOR</strong> tetap terlihat oleh operator jaringan — dan dalam kerumunan yang kecil, itu saja sudah cukup untuk menunjukmu. Anonimitas butuh kerumunan; di jaringan kecil, pengguna TOR satu-satunya justru paling mencolok. (Bridge mengurangi jejak ini, tapi pelajaran utamanya adalah soal <em>kapan dan dari mana</em> kamu terhubung.)</p>
+            </div>
+
+            <div class="imgrec">
+              <div class="ir-title">📷 Rekomendasi gambar</div>
+              <p>(1) Tangkapan layar <strong>View Logs</strong> dengan baris "Bootstrapped 100%". (2) Grafik jumlah relay di <strong>metrics.torproject.org</strong> sebagai bukti skala jaringan relawan.</p>
+              <p><span class="ir-key">Cari: "tor browser connection logs bootstrapped", "tor metrics relays graph"</span></p>
+            </div>
+          `,
+          practice:`<p>Tiga percobaan singkat untuk membumikan teori: (1) Buka tiga situs berbeda di TOR Browser, klik ikon gembok di masing-masing — catat ketiga relay-nya. Kamu akan melihat <strong>Guard selalu sama</strong> sementara Middle/Exit berganti: itulah guard pinning + stream isolation bekerja di depan matamu. (2) Buka <em>Settings → Connection → View Logs</em>, temukan baris <code>Bootstrapped 100%</code>. (3) Buka file <code>torrc</code> dengan Notepad (jangan ubah apa pun dulu) dan kenali baris-baris bridge jika kamu pernah mengaktifkannya.</p>`,
+          takeaways:[
+            "Consensus dari 9 directory authorities (diperbarui tiap jam) adalah 'peta resmi' relay — ditandatangani mayoritas, sulit dipalsukan.",
+            "Circuit dibangun teleskopik: tiga handshake ntor menghasilkan tiga kunci; tiap relay hanya bisa mengupas satu lapis.",
+            "Cell seragam 512 byte + stream isolation melawan traffic analysis dan mencegah satu exit memprofilkan seluruh sesimu.",
+            "Guard sengaja 'lengket' berbulan-bulan — dan kasus Harvard 2013 membuktikan: yang membongkarmu sering kali bukan kriptografi, tapi konteks (siapa pakai TOR, di mana, kapan)."
           ]
         },
         {

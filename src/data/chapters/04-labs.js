@@ -1,4 +1,4 @@
-/* Bab 4 — id: "labs"
+/* Bab 4 — id: "labs" (rev: + Lab 08 circuit/stream isolation, capstone jadi Lab 09)
    Data satu bab. Diimpor & digabung di ../courseData.js.
    'body'/'practice' tetap string HTML (dirender via dangerouslySetInnerHTML). */
 
@@ -11,7 +11,7 @@ export const chapter = {
           title:"Cara Kerja Lab & Aturan Main",
           dur:"baca dulu · ± 6 menit",
           body:`
-            <p class="lead">Sampai sini kamu sudah punya teorinya. Bab ini mengubah teori jadi keterampilan otot lewat 8 lab yang semuanya bisa kamu kerjakan sendiri, aman, dan legal. Tujuannya satu: saat kamu benar-benar berada di dark web, tanganmu sudah hafal apa yang harus dilakukan.</p>
+            <p class="lead">Sampai sini kamu sudah punya teorinya. Bab ini mengubah teori jadi keterampilan otot lewat 9 lab yang semuanya bisa kamu kerjakan sendiri, aman, dan legal. Tujuannya satu: saat kamu benar-benar berada di dark web, tanganmu sudah hafal apa yang harus dilakukan.</p>
 
             <h4>Yang kamu butuhkan</h4>
             <ul>
@@ -21,9 +21,9 @@ export const chapter = {
               <li>Waktu tenang tanpa terburu-buru. OPSEC yang baik lahir dari kebiasaan, bukan kebut-kebutan.</li>
             </ul>
 
-            <h4>Peta 8 lab</h4>
+            <h4>Peta 9 lab</h4>
             <figure class="fig">
-              <svg viewBox="0 0 720 210" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Peta progres 8 lab">
+              <svg viewBox="0 0 720 270" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Peta progres 9 lab">
                 <defs><marker id="arl" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#4fe0d0"/></marker></defs>
                 <text x="360" y="22" text-anchor="middle" fill="#e9f1f7" font-family="monospace" font-size="13" font-weight="700">Dari fondasi menuju mahir</text>
                 <g font-family="monospace" font-size="9">
@@ -34,13 +34,14 @@ export const chapter = {
                   <rect x="18" y="110" width="150" height="40" rx="8" fill="#15202b" stroke="#f5b748"/><text x="93" y="126" text-anchor="middle" fill="#f5b748">05 OnionShare</text><text x="93" y="140" text-anchor="middle" fill="#9fb4c4">berbagi file</text>
                   <rect x="190" y="110" width="150" height="40" rx="8" fill="#15202b" stroke="#f5b748"/><text x="265" y="126" text-anchor="middle" fill="#f5b748">06 Host onion</text><text x="265" y="140" text-anchor="middle" fill="#9fb4c4">situs sendiri</text>
                   <rect x="362" y="110" width="150" height="40" rx="8" fill="#15202b" stroke="#fb7185"/><text x="437" y="126" text-anchor="middle" fill="#fb7185">07 Deteksi scam</text><text x="437" y="140" text-anchor="middle" fill="#9fb4c4">anti-phishing</text>
-                  <rect x="534" y="110" width="168" height="40" rx="8" fill="#15202b" stroke="#5fd98a"/><text x="618" y="126" text-anchor="middle" fill="#5fd98a">08 Threat model</text><text x="618" y="140" text-anchor="middle" fill="#9fb4c4">capstone</text>
+                  <rect x="534" y="110" width="168" height="40" rx="8" fill="#15202b" stroke="#fb7185"/><text x="618" y="126" text-anchor="middle" fill="#fb7185">08 Circuit &amp; isolasi</text><text x="618" y="140" text-anchor="middle" fill="#9fb4c4">uji anonimitas</text>
+                  <rect x="286" y="176" width="168" height="40" rx="8" fill="#15202b" stroke="#5fd98a"/><text x="370" y="192" text-anchor="middle" fill="#5fd98a">09 Threat model</text><text x="370" y="206" text-anchor="middle" fill="#9fb4c4">capstone</text>
                 </g>
                 <g stroke="#4fe0d0" stroke-width="1.6" marker-end="url(#arl)">
                   <line x1="168" y1="64" x2="186" y2="64"/><line x1="340" y1="64" x2="358" y2="64"/><line x1="512" y1="64" x2="530" y2="64"/>
                   <line x1="168" y1="130" x2="186" y2="130"/><line x1="340" y1="130" x2="358" y2="130"/><line x1="512" y1="130" x2="530" y2="130"/>
                 </g>
-                <text x="360" y="186" text-anchor="middle" fill="#9fb4c4" font-family="monospace" font-size="10">Kerjakan berurutan; tiap lab memakai keterampilan dari lab sebelumnya.</text>
+                <text x="360" y="248" text-anchor="middle" fill="#9fb4c4" font-family="monospace" font-size="10">Kerjakan berurutan; tiap lab memakai keterampilan dari lab sebelumnya.</text>
               </svg>
               <figcaption>Urutan sengaja menanjak: fondasi → kebersihan → interaksi → membuat → bertahan → menyusun rencana.</figcaption>
             </figure>
@@ -58,7 +59,7 @@ export const chapter = {
             </div>
           `,
           takeaways:[
-            "8 lab disusun menanjak: fondasi → kebersihan → interaksi → membuat → bertahan → rencana.",
+            "9 lab disusun menanjak: fondasi → kebersihan → interaksi → membuat → bertahan → menguji → rencana.",
             "Siapkan USB TAILS, komputer yang bisa boot USB, dan idealnya perangkat kedua untuk panduan.",
             "Tiap lab punya kriteria keberhasilan; jangan lanjut sebelum terpenuhi.",
             "Semua lab defensif & legal; pakai persona latihan, bukan identitas asli."
@@ -440,8 +441,82 @@ export const chapter = {
           ]
         },
         {
+          id:"lab-circuits",
+          title:"Lab 08 — Membedah Circuit & Menguji Stream Isolation",
+          dur:"lab · 35 mnt",
+          body:`
+            <p class="lead">Di materi deep-dive Bab 1 kamu belajar bahwa TOR memakai guard yang lengket, memisahkan circuit per situs, dan merotasi jalur secara berkala. Lab ini membuktikan ketiganya <strong>dengan matamu sendiri</strong> — sekaligus melatih keterampilan membaca circuit yang berguna saat mendiagnosis masalah di lapangan.</p>
+
+            <h4>Tujuan</h4>
+            <ul>
+              <li>Mampu melihat & membaca semua circuit yang sedang aktif di TAILS.</li>
+              <li>Membuktikan secara empiris: guard pinning, stream isolation per domain, dan rotasi circuit.</li>
+              <li>Mengenal "siapa" relay yang sedang kamu pakai lewat Relay Search resmi.</li>
+            </ul>
+
+            <h4>Bagian A — Melihat seluruh circuit dengan Onion Circuits</h4>
+            <ol class="steps">
+              <li>Boot TAILS, tunggu sampai TOR tersambung penuh.</li>
+              <li>Buka aplikasi <strong>Onion Circuits</strong> (cari lewat Activities / menu Applications). Akan tampil daftar circuit yang sedang hidup; klik salah satu untuk melihat <strong>tiga relay-nya</strong> beserta negara, IP, dan bandwidth tiap relay.</li>
+              <li>Amati: bahkan sebelum kamu membuka satu situs pun, sudah ada beberapa circuit siaga (TOR membangun cadangan agar browsing terasa cepat).</li>
+            </ol>
+
+            <h4>Bagian B — Membuktikan stream isolation</h4>
+            <ol class="steps">
+              <li>Di Tor Browser, buka <strong>tiga situs berbeda</strong> di tiga tab (mis. wikipedia.org, torproject.org, eff.org).</li>
+              <li>Di tiap tab, klik ikon gembok dan catat tiga relay-nya di catatan latihanmu (cukup nama/negara).</li>
+              <li>Cocokkan dengan daftar di Onion Circuits. Yang harus kamu temukan: <strong>relay pertama (guard) selalu sama</strong>, sementara middle/exit berbeda antar situs. Itulah guard pinning + isolasi per domain dalam satu pengamatan.</li>
+              <li>Bonus pembuktian: buka dua <em>halaman berbeda</em> dari situs yang sama — keduanya memakai <strong>circuit yang sama</strong>. Isolasi bekerja per domain utama, bukan per tab.</li>
+            </ol>
+
+            <h4>Bagian C — Mengenal relay-mu (Relay Search)</h4>
+            <ol class="steps">
+              <li>Salin nama (nickname) salah satu relay dari Onion Circuits.</li>
+              <li>Buka <code>metrics.torproject.org</code> → fitur <strong>Relay Search</strong>, cari nickname tadi.</li>
+              <li>Baca profilnya: flag (<code>Guard</code>/<code>Exit</code>/<code>Fast</code>), bandwidth, sejak kapan beroperasi, kontak operatornya. Sadari: ini komputer relawan sungguhan — universitas, aktivis, individu — bukan "server misterius".</li>
+            </ol>
+
+            <h4>Bagian D — Rotasi & New Identity</h4>
+            <ol class="steps">
+              <li>Biarkan ±10–15 menit, lalu buka situs <em>baru</em>. Bandingkan circuit-nya dengan catatanmu — middle/exit kemungkinan sudah berganti (rotasi berkala), guard tetap.</li>
+              <li>Klik <strong>New Identity</strong> di Tor Browser, lalu lihat Onion Circuits: circuit lama dirobohkan serempak dan dibangun ulang. Pahami bedanya dengan "New Tor Circuit for this Site" yang hanya mengganti jalur satu situs.</li>
+            </ol>
+
+            <div class="box practice" style="margin-top:18px">
+              <div class="bx-title">✔ Kriteria keberhasilan</div>
+              <p>(1) Kamu bisa menunjukkan ≥3 circuit aktif di Onion Circuits dan menyebut peran tiap relay; (2) catatanmu membuktikan guard sama + exit berbeda untuk 3 situs berbeda; (3) kamu menemukan profil minimal satu relay di Relay Search; (4) kamu bisa menjelaskan beda New Identity vs New Circuit dengan kata-katamu sendiri.</p>
+            </div>
+
+            <h4>Kalau hasilnya "aneh" (troubleshooting)</h4>
+            <ul>
+              <li><strong>Onion Circuits kosong</strong> → TOR belum tersambung; selesaikan koneksi dulu (cek captive portal/bridge).</li>
+              <li><strong>Guard ikut berubah</strong> → wajar jika kamu memakai bridge (bridge menggantikan posisi guard) atau baru saja New Identity berkali-kali. Di sesi normal tanpa bridge, guard stabil.</li>
+              <li><strong>Dua situs memakai exit sama</strong> → bisa terjadi secara kebetulan (jumlah exit terbatas); yang penting <em>circuit</em>-nya berbeda, bukan exit-nya.</li>
+              <li><strong>Relay tidak ketemu di Relay Search</strong> → cari pakai fingerprint (deretan heksadesimal di detail circuit), lebih unik daripada nickname.</li>
+            </ul>
+
+            <div class="box tip">
+              <div class="bx-title">◇ Kenapa lab ini penting</div>
+              <p>Orang yang hanya "percaya TOR bekerja" akan panik saat ada keanehan. Orang yang pernah <em>melihat</em> circuit-nya sendiri tahu apa yang normal dan apa yang tidak — dan itu bedanya pengguna biasa dengan pengguna yang sadar-OPSEC. Catatan kecil: hasil pengamatanmu (nama relay, negara) tidak perlu dibagikan ke siapa pun; itu bagian dari profil penggunaan pribadimu.</p>
+            </div>
+
+            <div class="imgrec">
+              <div class="ir-title">📷 Rekomendasi gambar</div>
+              <p>(1) Jendela <strong>Onion Circuits</strong> di TAILS dengan satu circuit terbuka. (2) Halaman <strong>Relay Search</strong> menampilkan profil sebuah relay dengan flag-nya.</p>
+              <p><span class="ir-key">Cari: "tails onion circuits screenshot", "tor metrics relay search result"</span></p>
+            </div>
+          `,
+          practice:`<p>Ulangi Bagian B di hari berbeda dan bandingkan: guard-mu seharusnya masih sama (umurnya berbulan-bulan). Lalu tulis di catatan latihanmu, dengan bahasamu sendiri, jawaban dua pertanyaan ini: "Kenapa guard yang lengket justru lebih aman?" dan "Apa yang dilindungi stream isolation jika ada exit node jahat?" Kalau kamu bisa menjawab tanpa membuka materi, konsepnya sudah jadi milikmu.</p>`,
+          takeaways:[
+            "Onion Circuits (TAILS) memperlihatkan semua circuit aktif: tiga relay, negara, dan bandwidth-nya.",
+            "Pengamatan kunci: guard tetap, middle/exit berganti per situs — bukti guard pinning + stream isolation.",
+            "Relay Search di metrics.torproject.org membuka profil relay: flag, bandwidth, operator — jaringan relawan yang nyata.",
+            "New Identity merobohkan semua circuit; New Circuit hanya mengganti jalur satu situs."
+          ]
+        },
+        {
           id:"lab-opsec",
-          title:"Lab 08 — Threat Model & Rencana OPSEC Pribadi (Capstone)",
+          title:"Lab 09 — Threat Model & Rencana OPSEC Pribadi (Capstone)",
           dur:"lab · 40 mnt",
           body:`
             <p class="lead">Semua alat dan teknik tidak ada artinya tanpa rencana. Capstone ini menyatukan seluruh kursus menjadi satu dokumen pribadi: <strong>model ancaman</strong>-mu dan <strong>rencana OPSEC</strong> yang mengalir darinya. Inilah yang membuatmu "terjun dengan tenang", bukan asal nekat.</p>
@@ -522,7 +597,7 @@ export const chapter = {
                options:["Percaya yang paling banyak dibagikan","Verifikasi pesan pengumuman ber-tanda tangan PGP","Pilih yang muncul pertama di pencarian","Tanya di forum"],
                answer:1,
                explain:"Tanda tangan PGP yang valid membuktikan pesan benar dari pemegang kunci dan tidak diubah — bukti keaslian terkuat."},
-              {q:"Inti dari threat model (Lab 08) adalah…",
+              {q:"Inti dari threat model (Lab 09) adalah…",
                options:["Memakai semua alat keamanan yang ada","Menentukan apa yang dilindungi, dari siapa, kemampuan lawan, dan konsekuensinya","Membeli VPN termahal","Menghafal semua perintah Linux"],
                answer:1,
                explain:"OPSEC yang tepat mengalir dari threat model: 'cukup aman' untuk ancaman nyata bagimu, bukan menumpuk alat tanpa arah."}
