@@ -1,14 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { course } from "./data/courseData.js";
+import { courses } from "./data/courses.js";
 import "./styles/styles.css";
 import "./styles/animations.css";
 
-/* Kunci penyimpanan di localStorage */
-const STORE_KEY = "darkweb_course_progress_v1";
-const POS_KEY = "darkweb_course_position_v1";
+const ACTIVE_KEY = "darkweb_active_course";
+const progKey = (id) => "darkweb_progress_" + id;
+const posKey = (id) => "darkweb_pos_" + id;
 
-/* Ratakan semua bab -> daftar materi linear: {ci, li, chapter, lecture, gid} */
-function buildFlat() {
+/* Ratakan chapters sebuah course -> daftar materi linear */
+function buildFlat(course) {
   const flat = [];
   course.chapters.forEach((c, ci) =>
     c.lectures.forEach((l, li) => {
@@ -17,51 +17,121 @@ function buildFlat() {
   );
   return flat;
 }
-
-function loadProgress() {
+function loadJSON(key) {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) || {} : {};
   } catch {
     return {};
   }
 }
-
-/* Baca posisi terakhir (materi yang sedang dibuka) */
-function loadPosition(max) {
+function loadPos(id, max) {
   try {
-    const n = parseInt(localStorage.getItem(POS_KEY) || "0", 10);
+    const n = parseInt(localStorage.getItem(posKey(id)) || "0", 10);
     if (Number.isFinite(n) && n >= 0 && n < max) return n;
   } catch {
     /* abaikan */
   }
   return 0;
 }
+function courseStats(course) {
+  const prog = loadJSON(progKey(course.id));
+  let total = 0,
+    done = 0;
+  course.chapters.forEach((c) =>
+    c.lectures.forEach((l) => {
+      total++;
+      if (prog[c.id + "::" + l.id]) done++;
+    })
+  );
+  return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
+}
+
+/* ref materi aktif (untuk auto-scroll sidebar) */
+let _activeEl = null;
+function activeRefSetter(el) {
+  if (el) _activeEl = el;
+}
 
 /* =========================================================================
-   KUIS — state lokal per materi (di-remount via key saat materi berganti)
+   DASHBOARD — pemilih materi
+   ========================================================================= */
+function Dashboard({ onOpen }) {
+  return (
+    <div className="dash">
+      <header className="dash-head">
+        <div className="kicker">Learning Hub</div>
+        <h1>Pusat Materi Belajar</h1>
+        <p className="dash-sub">
+          Pilih materi yang ingin kamu pelajari. Tiap materi punya progres &amp;
+          posisi terakhirnya sendiri.
+        </p>
+      </header>
+
+      <div className="dash-grid">
+        {courses.map((c) => {
+          const st = courseStats(c);
+          const lectures = c.chapters.reduce(
+            (a, ch) => a + ch.lectures.length,
+            0
+          );
+          return (
+            <button
+              className="course-card"
+              key={c.id}
+              onClick={() => onOpen(c.id)}
+              style={{ "--c-accent": c.accent }}
+            >
+              <div className="cc-top">
+                <span className="cc-icon">{c.icon}</span>
+                <span className="cc-kicker">{c.kicker}</span>
+              </div>
+              <h2 className="cc-title">{c.title}</h2>
+              <p className="cc-sub">{c.subtitle}</p>
+              <div className="cc-meta">
+                <span>{c.chapters.length} bab</span>
+                <span>·</span>
+                <span>{lectures} materi</span>
+              </div>
+              <div className="cc-bar">
+                <span style={{ width: st.pct + "%" }} />
+              </div>
+              <div className="cc-foot">
+                <span className="cc-pct">{st.pct}% selesai</span>
+                <span className="cc-go">Buka →</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="dash-note">
+        Progresmu tersimpan otomatis di perangkat ini. Klik sebuah kartu untuk
+        mulai atau melanjutkan.
+      </p>
+    </div>
+  );
+}
+
+/* =========================================================================
+   KUIS
    ========================================================================= */
 function Quiz({ quiz }) {
   const [answered, setAnswered] = useState({});
-
   const total = quiz.questions.length;
-  const answeredCount = Object.keys(answered).length;
-  const allAnswered = answeredCount === total;
+  const allAnswered = Object.keys(answered).length === total;
   const score = quiz.questions.reduce(
     (acc, q, i) => acc + (answered[i] === q.answer ? 1 : 0),
     0
   );
-
   const choose = (qi, oi) => {
     if (answered[qi] !== undefined) return;
     setAnswered((a) => ({ ...a, [qi]: oi }));
   };
-
   return (
     <div className="quiz">
       <h3>{quiz.title}</h3>
       <div className="qsub">{quiz.sub}</div>
-
       {quiz.questions.map((q, qi) => {
         const chosen = answered[qi];
         const locked = chosen !== undefined;
@@ -71,7 +141,6 @@ function Quiz({ quiz }) {
               <span className="qn">{qi + 1}.</span>
               {q.q}
             </div>
-
             {q.options.map((opt, oi) => {
               let cls = "opt";
               if (locked) {
@@ -86,7 +155,6 @@ function Quiz({ quiz }) {
                 </div>
               );
             })}
-
             <div className={"explain" + (locked ? " show" : "")}>
               {locked
                 ? (chosen === q.answer ? "✓ Benar. " : "✗ Kurang tepat. ") +
@@ -96,7 +164,6 @@ function Quiz({ quiz }) {
           </div>
         );
       })}
-
       <div className={"quiz-score" + (allAnswered ? " show" : "")}>
         {allAnswered
           ? `Skor: ${score} / ${total}${score === total ? "  — sempurna! 🎯" : ""}`
@@ -107,9 +174,10 @@ function Quiz({ quiz }) {
 }
 
 /* =========================================================================
-   SIDEBAR — brand, progres, PENCARIAN, dan navigasi bab/materi
+   SIDEBAR
    ========================================================================= */
 function Sidebar({
+  course,
   flat,
   current,
   progress,
@@ -117,6 +185,7 @@ function Sidebar({
   onToggleChapter,
   onGo,
   onReset,
+  onHome,
   mobileOpen,
   query,
   setQuery,
@@ -139,15 +208,11 @@ function Sidebar({
   return (
     <aside className={"sidebar" + (mobileOpen ? " open" : "")} id="sidebar">
       <div className="brand">
-        <div className="kicker">Self-Paced Course</div>
-        <h1>
-          The Ultimate Dark Web,
-          <br />
-          Anonymity, Privacy
-          <br />
-          &amp; Security
-        </h1>
-        <div className="sub">// modul belajar interaktif</div>
+        <button className="home-btn" onClick={onHome}>
+          ← Semua materi
+        </button>
+        <div className="kicker">{course.kicker}</div>
+        <h1>{course.title}</h1>
       </div>
 
       <div className="progress-wrap">
@@ -194,11 +259,9 @@ function Sidebar({
                   "sr-item" +
                   (progress[f.gid] ? " done" : "") +
                   (fi === current ? " active" : "");
-                const chapLabel =
-                  f.ci === 0 ? "Mulai di Sini" : "Bab " + f.ci;
                 return (
                   <button className={cls} key={f.gid} onClick={() => onGo(fi)}>
-                    <span className="sr-chap">{chapLabel}</span>
+                    <span className="sr-chap">{f.chapter.title}</span>
                     <span className="sr-title">{f.lecture.title}</span>
                   </button>
                 );
@@ -214,17 +277,17 @@ function Sidebar({
             const open = openChapters.has(ci);
             return (
               <div className={"chap" + (open ? " open" : "")} key={c.id}>
-                <button className="chap-head" onClick={() => onToggleChapter(ci)}>
-                  <span className="chap-num">
-                    {ci === 0 ? "★" : String(ci).padStart(2, "0")}
-                  </span>
+                <button
+                  className="chap-head"
+                  onClick={() => onToggleChapter(ci)}
+                >
+                  <span className="chap-num">{String(ci + 1).padStart(2, "0")}</span>
                   <span className="chap-title">{c.title}</span>
                   <span className="chap-count">
                     {chapterDone(c)}/{c.lectures.length}
                   </span>
                   <span className="chevron">▶</span>
                 </button>
-
                 <div className="lectures">
                   {c.lectures.map((l) => {
                     const gid = c.id + "::" + l.id;
@@ -255,14 +318,8 @@ function Sidebar({
   );
 }
 
-/* ref callback: simpan elemen materi aktif agar bisa di-scroll ke tampak */
-let _activeEl = null;
-function activeRefSetter(el) {
-  if (el) _activeEl = el;
-}
-
 /* =========================================================================
-   MAIN — isi materi
+   MAIN
    ========================================================================= */
 function Main({ flat, current, progress, onToggleDone, onGo }) {
   const f = flat[current];
@@ -270,7 +327,7 @@ function Main({ flat, current, progress, onToggleDone, onGo }) {
   const c = f.chapter;
   const done = !!progress[f.gid];
   const total = flat.length;
-  const chapLabel = f.ci === 0 ? "Mulai di Sini" : "Bab " + f.ci + " — " + c.title;
+  const chapLabel = c.title;
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -281,9 +338,7 @@ function Main({ flat, current, progress, onToggleDone, onGo }) {
       <div className="crumb">
         {chapLabel} &nbsp;/&nbsp; <b>Materi {f.li + 1}</b>
       </div>
-
       <h2 className={"lec-h" + (l.cover ? " cover" : "")}>{l.title}</h2>
-
       <div className="meta">
         <span className="pill dur">⏱ {l.dur}</span>
         <span className="pill">
@@ -344,9 +399,6 @@ function Main({ flat, current, progress, onToggleDone, onGo }) {
   );
 }
 
-/* =========================================================================
-   MOBILE BOTTOM NAV
-   ========================================================================= */
 function MobileNav({ current, total, done, onPrev, onNext, onToggleDone }) {
   return (
     <nav className="mobnav" aria-label="Navigasi materi">
@@ -377,36 +429,34 @@ function MobileNav({ current, total, done, onPrev, onNext, onToggleDone }) {
 }
 
 /* =========================================================================
-   APP
+   COURSE VIEW — satu materi (sidebar + konten), dipakai ulang semua course
    ========================================================================= */
-export default function App() {
-  const flat = useMemo(buildFlat, []);
-  const [progress, setProgress] = useState(loadProgress);
-  const [current, setCurrent] = useState(() => loadPosition(buildFlat().length));
+function CourseView({ course, onHome }) {
+  const flat = useMemo(() => buildFlat(course), [course]);
+  const [progress, setProgress] = useState(() => loadJSON(progKey(course.id)));
+  const [current, setCurrent] = useState(() => loadPos(course.id, flat.length));
   const [openChapters, setOpenChapters] = useState(
-    () => new Set([flat[loadPosition(flat.length)].ci])
+    () => new Set([flat[loadPos(course.id, flat.length)].ci])
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [readPct, setReadPct] = useState(0);
 
-  /* Simpan progres */
   useEffect(() => {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(progress));
+      localStorage.setItem(progKey(course.id), JSON.stringify(progress));
     } catch {
       /* abaikan */
     }
-  }, [progress]);
+  }, [progress, course.id]);
 
-  /* Simpan posisi materi terakhir (#1 resume) */
   useEffect(() => {
     try {
-      localStorage.setItem(POS_KEY, String(current));
+      localStorage.setItem(posKey(course.id), String(current));
     } catch {
       /* abaikan */
     }
-  }, [current]);
+  }, [current, course.id]);
 
   const go = useCallback(
     (i) => {
@@ -439,7 +489,7 @@ export default function App() {
 
   const resetProgress = useCallback(() => setProgress({}), []);
 
-  /* #4 Navigasi keyboard: ←/→ pindah materi, Esc tutup drawer */
+  /* keyboard nav */
   useEffect(() => {
     const onKey = (e) => {
       const tag = (e.target && e.target.tagName) || "";
@@ -450,54 +500,48 @@ export default function App() {
         return;
       }
       if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === "ArrowRight") {
+      if (e.key === "ArrowRight")
         setCurrent((c) => {
           const n = Math.min(flat.length - 1, c + 1);
           if (n !== c) {
-            setOpenChapters((prev) => new Set(prev).add(flat[n].ci));
+            setOpenChapters((p) => new Set(p).add(flat[n].ci));
             setQuery("");
           }
           return n;
         });
-      } else if (e.key === "ArrowLeft") {
+      else if (e.key === "ArrowLeft")
         setCurrent((c) => {
           const n = Math.max(0, c - 1);
           if (n !== c) {
-            setOpenChapters((prev) => new Set(prev).add(flat[n].ci));
+            setOpenChapters((p) => new Set(p).add(flat[n].ci));
             setQuery("");
           }
           return n;
         });
-      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [flat]);
 
-  /* #3 Bilah progres baca: lacak scroll dalam satu materi */
-  useEffect(() => {
-    setReadPct(0);
-  }, [current]);
+  /* reading progress */
+  useEffect(() => setReadPct(0), [current]);
   useEffect(() => {
     const onScroll = () => {
       const doc = document.documentElement;
       const max = doc.scrollHeight - doc.clientHeight;
-      const p = max > 0 ? (doc.scrollTop / max) * 100 : 0;
-      setReadPct(Math.max(0, Math.min(100, p)));
+      setReadPct(max > 0 ? Math.max(0, Math.min(100, (doc.scrollTop / max) * 100)) : 0);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  /* #5-ringan: gulirkan materi aktif ke tampak di sidebar saat berpindah */
+  /* auto-scroll materi aktif di sidebar */
   useEffect(() => {
-    if (_activeEl && _activeEl.scrollIntoView) {
+    if (_activeEl && _activeEl.scrollIntoView)
       _activeEl.scrollIntoView({ block: "nearest" });
-    }
   }, [current, query]);
 
-  /* Nilai turunan */
   const total = flat.length;
   const doneCount = flat.filter((f) => progress[f.gid]).length;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
@@ -505,8 +549,7 @@ export default function App() {
   const currentDone = !!progress[currentGid];
 
   return (
-    <>
-      {/* #3 Bilah progres baca (paling atas) */}
+    <div className="course-root" style={{ "--accent": course.accent }}>
       <div className="read-progress" aria-hidden="true">
         <span style={{ width: readPct + "%" }} />
       </div>
@@ -519,7 +562,10 @@ export default function App() {
         >
           ☰
         </button>
-        <span className="tt">Anonymity, Privacy &amp; Security</span>
+        <button className="home-btn-m" onClick={onHome} aria-label="Semua materi">
+          ⌂
+        </button>
+        <span className="tt">{course.title}</span>
         <span className="tb-pct">{pct}%</span>
         <span className="topbar-progress" style={{ width: pct + "%" }} />
       </div>
@@ -531,6 +577,7 @@ export default function App() {
 
       <div className="app">
         <Sidebar
+          course={course}
           flat={flat}
           current={current}
           progress={progress}
@@ -538,6 +585,7 @@ export default function App() {
           onToggleChapter={toggleChapter}
           onGo={go}
           onReset={resetProgress}
+          onHome={onHome}
           mobileOpen={mobileOpen}
           query={query}
           setQuery={setQuery}
@@ -560,6 +608,42 @@ export default function App() {
         onNext={() => go(current + 1)}
         onToggleDone={() => toggleDone(currentGid)}
       />
-    </>
+    </div>
   );
+}
+
+/* =========================================================================
+   APP — pilih dashboard atau sebuah course
+   ========================================================================= */
+export default function App() {
+  const [activeId, setActiveId] = useState(() => {
+    try {
+      const id = localStorage.getItem(ACTIVE_KEY) || "";
+      return courses.some((c) => c.id === id) ? id : "";
+    } catch {
+      return "";
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ACTIVE_KEY, activeId);
+    } catch {
+      /* abaikan */
+    }
+  }, [activeId]);
+
+  const open = useCallback((id) => {
+    setActiveId(id);
+    window.scrollTo(0, 0);
+  }, []);
+  const home = useCallback(() => {
+    setActiveId("");
+    window.scrollTo(0, 0);
+  }, []);
+
+  const active = courses.find((c) => c.id === activeId);
+
+  if (!active) return <Dashboard onOpen={open} />;
+  return <CourseView course={active} onHome={home} key={active.id} />;
 }
